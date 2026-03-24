@@ -1,0 +1,28 @@
+syntax = "proto3";
+option java_multiple_files = true;
+option java_package = "com.smartclass.attendance";
+
+message Empty {}
+
+message StudentRequest {
+  string student_id = 1;
+  string timestamp = 2;
+}
+
+message AttendanceResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message AttendanceRecord {
+  string student_id = 1;
+  string timestamp = 2;
+  string status = 3;
+}
+
+service AttendanceService {
+  // Simple RPC
+  rpc LogAttendance(StudentRequest) returns (AttendanceResponse);
+  // Server-Side Streaming RPC
+  rpc StreamAttendanceLogs(Empty) returns (stream AttendanceRecord);
+}
