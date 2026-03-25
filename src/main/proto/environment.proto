@@ -1,0 +1,29 @@
+syntax = "proto3";
+option java_multiple_files = true;
+option java_package = "com.smartclass.environment";
+
+message Empty {}
+
+message MetricsResponse {
+  int32 noise_level = 1;
+  float lux_level = 2;
+}
+
+message SensorReading {
+  string sensor_id = 1;
+  float value = 2;
+}
+
+message BatchUploadResponse {
+  bool success = 1;
+  int32 readings_received = 2;
+}
+
+service EnvironmentService {
+  // Simple RPC
+  rpc GetMetrics(Empty) returns (MetricsResponse);
+  // Server-Side Streaming RPC
+  rpc StreamLiveMetrics(Empty) returns (stream MetricsResponse);
+  // Client-Side Streaming RPC
+  rpc UploadSensorBatch(stream SensorReading) returns (BatchUploadResponse);
+}
