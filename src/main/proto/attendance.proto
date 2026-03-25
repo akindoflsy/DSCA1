@@ -21,8 +21,8 @@ message AttendanceRecord {
 }
 
 service AttendanceService {
-  // Simple RPC
+  // simple RPC
   rpc LogAttendance(StudentRequest) returns (AttendanceResponse);
-  // Server-Side Streaming RPC
+  // server-side streaming RPC
   rpc StreamAttendanceLogs(Empty) returns (stream AttendanceRecord);
 }

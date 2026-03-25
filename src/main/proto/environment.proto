@@ -20,10 +20,10 @@ message BatchUploadResponse {
 }
 
 service EnvironmentService {
-  // Simple RPC
+  // simple RPC
   rpc GetMetrics(Empty) returns (MetricsResponse);
-  // Server-Side Streaming RPC
+  // server-side streaming RPC
   rpc StreamLiveMetrics(Empty) returns (stream MetricsResponse);
-  // Client-Side Streaming RPC
+  // client-side streaming RPC
   rpc UploadSensorBatch(stream SensorReading) returns (BatchUploadResponse);
 }
