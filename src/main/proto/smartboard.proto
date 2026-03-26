@@ -1,0 +1,28 @@
+syntax = "proto3";
+option java_multiple_files = true;
+option java_package = "com.smartclass.smartboard";
+
+message ContentRequest {
+  string lesson_url = 1;
+  string media_type = 2;
+}
+
+message ActionResponse {
+  bool success = 1;
+  string status_message = 2;
+}
+
+message TeacherCommand {
+  string command = 1;
+}
+
+message BoardEvent {
+  string event_info = 1;
+}
+
+service SmartBoardService {
+  // Simple RPC
+  rpc PushContent(ContentRequest) returns (ActionResponse);
+  // Bidirectional Streaming RPC
+  rpc LiveClassSession(stream TeacherCommand) returns (stream BoardEvent);
+}
