@@ -72,7 +72,14 @@ public class TeacherControlPanel extends JFrame {
                 @Override
                 public void serviceResolved(ServiceEvent event) {
                     String serviceName = event.getName();
-                    String host = event.getInfo().getHostAddresses()[0];
+                    String[] addresses = event.getInfo().getHostAddresses();
+
+                    if (addresses == null || addresses.length == 0) {
+                        logMessage("System: Address not resolved for " + serviceName);
+                        return;
+                    }
+
+                    String host = addresses[0];
                     int port = event.getInfo().getPort();
 
                     logMessage("System: Discovered " + serviceName + " at " + host + ":" + port);
