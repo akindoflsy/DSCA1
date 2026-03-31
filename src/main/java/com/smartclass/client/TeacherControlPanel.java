@@ -20,6 +20,10 @@ public class TeacherControlPanel extends JFrame {
     private AttendanceServiceGrpc.AttendanceServiceBlockingStub attendanceStub;
     private EnvironmentServiceGrpc.EnvironmentServiceBlockingStub environmentStub;
     private SmartBoardServiceGrpc.SmartBoardServiceBlockingStub smartBoardStub;
+    
+    private AttendanceServiceGrpc.AttendanceServiceStub attendanceAsyncStub;
+    private EnvironmentServiceGrpc.EnvironmentServiceStub environmentAsyncStub;
+    private SmartBoardServiceGrpc.SmartBoardServiceStub smartBoardAsyncStub;
 
     public TeacherControlPanel() {
         setupGUI();
@@ -37,6 +41,7 @@ public class TeacherControlPanel extends JFrame {
         add(new JScrollPane(logArea), BorderLayout.CENTER);
 
         JPanel buttonPanel = new JPanel();
+        buttonPanel.setLayout(new GridLayout(2, 3));
 
         JButton btnAttendance = new JButton("Test Attendance");
         btnAttendance.addActionListener(e -> callAttendanceService());
@@ -47,9 +52,21 @@ public class TeacherControlPanel extends JFrame {
         JButton btnSmartBoard = new JButton("Push Content");
         btnSmartBoard.addActionListener(e -> callSmartBoardService());
 
+        JButton btnStreamAttendance = new JButton("Stream Attendance");
+        btnStreamAttendance.addActionListener(e -> streamAttendanceService());
+
+        JButton btnUploadSensors = new JButton("Upload Sensors");
+        btnUploadSensors.addActionListener(e -> uploadSensorBatchService());
+        
+        JButton btnLiveSession = new JButton("Live Session");
+        btnLiveSession.addActionListener(e -> liveClassSessionService());
+
         buttonPanel.add(btnAttendance);
         buttonPanel.add(btnEnvironment);
         buttonPanel.add(btnSmartBoard);
+        buttonPanel.add(btnStreamAttendance);
+        buttonPanel.add(btnUploadSensors);
+        buttonPanel.add(btnLiveSession);
 
         add(buttonPanel, BorderLayout.SOUTH);
     }
@@ -91,12 +108,15 @@ public class TeacherControlPanel extends JFrame {
                     switch (serviceName) {
                         case "AttendanceService":
                             attendanceStub = AttendanceServiceGrpc.newBlockingStub(channel);
+                            attendanceAsyncStub = AttendanceServiceGrpc.newStub(channel);
                             break;
                         case "EnvironmentService":
                             environmentStub = EnvironmentServiceGrpc.newBlockingStub(channel);
+                            environmentAsyncStub = EnvironmentServiceGrpc.newStub(channel);
                             break;
                         case "SmartBoardService":
                             smartBoardStub = SmartBoardServiceGrpc.newBlockingStub(channel);
+                            smartBoardAsyncStub = SmartBoardServiceGrpc.newStub(channel);
                             break;
                     }
                 }
@@ -150,6 +170,96 @@ public class TeacherControlPanel extends JFrame {
             ActionResponse response = smartBoardStub.pushContent(request);
             logMessage("SmartBoard Server: " + response.getStatusMessage());
         } catch (Exception e) {
+            logMessage("RPC Failed: " + e.getMessage());
+        }
+    }
+
+    private void streamAttendanceService() {
+        if (attendanceAsyncStub == null) {
+            logMessage("Error: AttendanceService not connected.");
+            return;
+        }
+        com.smartclass.attendance.Empty request = com.smartclass.attendance.Empty.newBuilder().build();
+        attendanceAsyncStub.streamAttendanceLogs(request, new io.grpc.stub.StreamObserver<AttendanceRecord>() {
+            @Override
+            public void onNext(AttendanceRecord record) {
+                logMessage("Attendance Stream: " + record.getStudentId() + " - " + record.getStatus());
+            }
+
+            @Override
+            public void onError(Throwable t) {
+                logMessage("Attendance Stream Error: " + t.getMessage());
+            }
+
+            @Override
+            public void onCompleted() {
+                logMessage("Attendance Stream Completed");
+            }
+        });
+    }
+
+    private void uploadSensorBatchService() {
+        if (environmentAsyncStub == null) {
+            logMessage("Error: EnvironmentService not connected.");
+            return;
+        }
+        io.grpc.stub.StreamObserver<BatchUploadResponse> responseObserver = new io.grpc.stub.StreamObserver<BatchUploadResponse>() {
+            @Override
+            public void onNext(BatchUploadResponse response) {
+                logMessage("Environment Upload: Success=" + response.getSuccess() + ", Received=" + response.getReadingsReceived());
+            }
+
+            @Override
+            public void onError(Throwable t) {
+                logMessage("Environment Upload Error: " + t.getMessage());
+            }
+
+            @Override
+            public void onCompleted() {
+                logMessage("Environment Upload Completed");
+            }
+        };
+
+        io.grpc.stub.StreamObserver<SensorReading> requestObserver = environmentAsyncStub.uploadSensorBatch(responseObserver);
+        try {
+            requestObserver.onNext(SensorReading.newBuilder().setSensorId("noise-1").setValue(45.5f).build());
+            requestObserver.onNext(SensorReading.newBuilder().setSensorId("lux-1").setValue(300.0f).build());
+            requestObserver.onCompleted();
+        } catch (Exception e) {
+            requestObserver.onError(e);
+            logMessage("RPC Failed: " + e.getMessage());
+        }
+    }
+
+    private void liveClassSessionService() {
+        if (smartBoardAsyncStub == null) {
+            logMessage("Error: SmartBoardService not connected.");
+            return;
+        }
+        io.grpc.stub.StreamObserver<BoardEvent> responseObserver = new io.grpc.stub.StreamObserver<BoardEvent>() {
+            @Override
+            public void onNext(BoardEvent event) {
+                logMessage("SmartBoard Stream: " + event.getEventInfo());
+            }
+
+            @Override
+            public void onError(Throwable t) {
+                logMessage("SmartBoard Stream Error: " + t.getMessage());
+            }
+
+            @Override
+            public void onCompleted() {
+                logMessage("SmartBoard Stream Completed");
+            }
+        };
+
+        io.grpc.stub.StreamObserver<TeacherCommand> requestObserver = smartBoardAsyncStub.liveClassSession(responseObserver);
+        try {
+            requestObserver.onNext(TeacherCommand.newBuilder().setCommand("NEXT_SLIDE").build());
+            requestObserver.onNext(TeacherCommand.newBuilder().setCommand("LOCK_BOARD").build());
+            requestObserver.onCompleted();
+        } catch (Exception e) {
+            requestObserver.onError(e);
             logMessage("RPC Failed: " + e.getMessage());
         }
     }
