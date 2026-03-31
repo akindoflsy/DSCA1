@@ -153,7 +153,7 @@ public class TeacherControlPanel extends JFrame {
             return;
         }
         try {
-            com.smartclass.environment.Empty request = com.smartclass.environment.Empty.newBuilder().build();
+            com.smartclass.environment.EmptyEnvironment request = com.smartclass.environment.EmptyEnvironment.newBuilder().build();
             MetricsResponse response = environmentStub.getMetrics(request);
             logMessage("Environment Server: Noise=" + response.getNoiseLevel() + "dB, Lux=" + response.getLuxLevel());
         } catch (Exception e) {
@@ -183,7 +183,7 @@ public class TeacherControlPanel extends JFrame {
             logMessage("Error: AttendanceService not connected.");
             return;
         }
-        com.smartclass.attendance.Empty request = com.smartclass.attendance.Empty.newBuilder().build();
+        com.smartclass.attendance.EmptyAttendance request = com.smartclass.attendance.EmptyAttendance.newBuilder().build();
         attendanceAsyncStub.streamAttendanceLogs(request, new io.grpc.stub.StreamObserver<AttendanceRecord>() {
             @Override
             public void onNext(AttendanceRecord record) {
@@ -207,7 +207,7 @@ public class TeacherControlPanel extends JFrame {
             logMessage("Error: EnvironmentService not connected.");
             return;
         }
-        com.smartclass.environment.Empty request = com.smartclass.environment.Empty.newBuilder().build();
+        com.smartclass.environment.EmptyEnvironment request = com.smartclass.environment.EmptyEnvironment.newBuilder().build();
         environmentAsyncStub.streamLiveMetrics(request, new io.grpc.stub.StreamObserver<MetricsResponse>() {
             @Override
             public void onNext(MetricsResponse response) {

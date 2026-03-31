@@ -41,7 +41,7 @@ public class AttendanceServer {
         }
 
         @Override
-        public void streamAttendanceLogs(Empty req, StreamObserver<AttendanceRecord> responseObserver) {
+        public void streamAttendanceLogs(EmptyAttendance req, StreamObserver<AttendanceRecord> responseObserver) {
             for (int i = 0; i < 5; i++) {
                 AttendanceRecord record = AttendanceRecord.newBuilder()
                         .setStudentId("Student-" + i)

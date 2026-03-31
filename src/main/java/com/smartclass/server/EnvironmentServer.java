@@ -32,7 +32,7 @@ public class EnvironmentServer {
 
         // Simple RPC
         @Override
-        public void getMetrics(Empty req, StreamObserver<MetricsResponse> responseObserver) {
+        public void getMetrics(EmptyEnvironment req, StreamObserver<MetricsResponse> responseObserver) {
             System.out.println("Received request for current metrics.");
             MetricsResponse response = MetricsResponse.newBuilder()
                     .setNoiseLevel(50) // mock data
@@ -44,7 +44,7 @@ public class EnvironmentServer {
 
         // Server-Side Streaming RPC
         @Override
-        public void streamLiveMetrics(Empty req, StreamObserver<MetricsResponse> responseObserver) {
+        public void streamLiveMetrics(EmptyEnvironment req, StreamObserver<MetricsResponse> responseObserver) {
             System.out.println("Starting live metrics stream to client...");
             for (int i = 0; i < 5; i++) {
                 MetricsResponse response = MetricsResponse.newBuilder()
