@@ -55,8 +55,8 @@ public class SmartBoardServer {
                     String feedback = "";
                     if (command.getCommand().equals("NEXT_SLIDE")) {
                         feedback = "SLIDE_CHANGED_TO_NEXT";
-                    } else if (command.getCommand().equals("LOCK_SCREEN")) {
-                        feedback = "SCREEN_LOCKED_SUCCESSFULLY";
+                    } else if (command.getCommand().equals("LOCK_BOARD")) {
+                        feedback = "BOARD_LOCKED_SUCCESSFULLY";
                     } else {
                         feedback = "COMMAND_EXECUTED: " + command.getCommand();
                     }

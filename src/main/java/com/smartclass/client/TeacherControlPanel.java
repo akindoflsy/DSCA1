@@ -41,7 +41,7 @@ public class TeacherControlPanel extends JFrame {
         add(new JScrollPane(logArea), BorderLayout.CENTER);
 
         JPanel buttonPanel = new JPanel();
-        buttonPanel.setLayout(new GridLayout(2, 3));
+        buttonPanel.setLayout(new GridLayout(3, 3));
 
         JButton btnAttendance = new JButton("Test Attendance");
         btnAttendance.addActionListener(e -> callAttendanceService());
@@ -55,6 +55,9 @@ public class TeacherControlPanel extends JFrame {
         JButton btnStreamAttendance = new JButton("Stream Attendance");
         btnStreamAttendance.addActionListener(e -> streamAttendanceService());
 
+        JButton btnStreamLiveMetrics = new JButton("Stream Live Metrics");
+        btnStreamLiveMetrics.addActionListener(e -> streamLiveMetricsService());
+
         JButton btnUploadSensors = new JButton("Upload Sensors");
         btnUploadSensors.addActionListener(e -> uploadSensorBatchService());
         
@@ -65,6 +68,7 @@ public class TeacherControlPanel extends JFrame {
         buttonPanel.add(btnEnvironment);
         buttonPanel.add(btnSmartBoard);
         buttonPanel.add(btnStreamAttendance);
+        buttonPanel.add(btnStreamLiveMetrics);
         buttonPanel.add(btnUploadSensors);
         buttonPanel.add(btnLiveSession);
 
@@ -194,6 +198,30 @@ public class TeacherControlPanel extends JFrame {
             @Override
             public void onCompleted() {
                 logMessage("Attendance Stream Completed");
+            }
+        });
+    }
+
+    private void streamLiveMetricsService() {
+        if (environmentAsyncStub == null) {
+            logMessage("Error: EnvironmentService not connected.");
+            return;
+        }
+        com.smartclass.environment.Empty request = com.smartclass.environment.Empty.newBuilder().build();
+        environmentAsyncStub.streamLiveMetrics(request, new io.grpc.stub.StreamObserver<MetricsResponse>() {
+            @Override
+            public void onNext(MetricsResponse response) {
+                logMessage("Live Metrics: Noise=" + response.getNoiseLevel() + "dB, Lux=" + response.getLuxLevel());
+            }
+
+            @Override
+            public void onError(Throwable t) {
+                logMessage("Live Metrics Stream Error: " + t.getMessage());
+            }
+
+            @Override
+            public void onCompleted() {
+                logMessage("Live Metrics Stream Completed");
             }
         });
     }
