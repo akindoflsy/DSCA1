@@ -1,8 +1,10 @@
 package com.smartclass.server;
 
 import com.smartclass.environment.*;
+import io.grpc.Context;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
+import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
 import javax.jmdns.JmDNS;
 import javax.jmdns.ServiceInfo;
@@ -14,10 +16,11 @@ public class EnvironmentServer {
         int port = 50052;
         Server server = ServerBuilder.forPort(port)
                 .addService(new EnvironmentServiceImpl())
+                .intercept(new AuthInterceptor())
                 .build()
                 .start();
 
-        System.out.println("Environment Server started, listening on " + port);
+        System.out.println("Environment server started, listening on " + port);
 
         // JmDNS service publishing
         JmDNS jmdns = JmDNS.create(InetAddress.getLocalHost());
@@ -34,12 +37,21 @@ public class EnvironmentServer {
         @Override
         public void getMetrics(EmptyEnvironment req, StreamObserver<MetricsResponse> responseObserver) {
             System.out.println("Received request for current metrics.");
-            MetricsResponse response = MetricsResponse.newBuilder()
-                    .setNoiseLevel(50) // mock data
-                    .setLuxLevel(30) // mock data
-                    .build();
-            responseObserver.onNext(response);
-            responseObserver.onCompleted();
+
+            try {
+                MetricsResponse response = MetricsResponse.newBuilder()
+                        .setNoiseLevel(50)
+                        .setLuxLevel(30)
+                        .build();
+                responseObserver.onNext(response);
+                responseObserver.onCompleted();
+            } catch (Exception e) {
+                responseObserver.onError(
+                        Status.INTERNAL
+                                .withDescription("Failed to retrieve metrics: " + e.getMessage())
+                                .withCause(e)
+                                .asRuntimeException());
+            }
         }
 
         // Server-Side Streaming RPC
@@ -47,12 +59,29 @@ public class EnvironmentServer {
         public void streamLiveMetrics(EmptyEnvironment req, StreamObserver<MetricsResponse> responseObserver) {
             System.out.println("Starting live metrics stream to client...");
             for (int i = 0; i < 5; i++) {
+                // Check if the client has cancelled the stream.
+                if (Context.current().isCancelled()) {
+                    System.out.println("Client cancelled the live metrics stream.");
+                    responseObserver.onError(
+                            Status.CANCELLED
+                                    .withDescription("Client cancelled the live metrics stream.")
+                                    .asRuntimeException());
+                    return;
+                }
+
                 MetricsResponse response = MetricsResponse.newBuilder()
-                        .setNoiseLevel(40 + (int)(Math.random() * 20)) // mock data
+                        .setNoiseLevel(40 + (int)(Math.random() * 20))
                         .setLuxLevel(300.0f + (float)(Math.random() * 50))
                         .build();
                 responseObserver.onNext(response);
-                try { Thread.sleep(2000); } catch (InterruptedException e) { e.printStackTrace(); }
+                try { Thread.sleep(2000); } catch (InterruptedException e) {
+                    System.err.println("Stream interrupted: " + e.getMessage());
+                    responseObserver.onError(
+                            Status.ABORTED
+                                    .withDescription("Metrics stream is interrupted on server.")
+                                    .asRuntimeException());
+                    return;
+                }
             }
             responseObserver.onCompleted();
         }
@@ -65,6 +94,14 @@ public class EnvironmentServer {
 
                 @Override
                 public void onNext(SensorReading reading) {
+                    // Input validation
+                    if (reading.getSensorId() == null || reading.getSensorId().isEmpty()) {
+                        responseObserver.onError(Status.INVALID_ARGUMENT
+                                .withDescription("Sensor ID can not be empty.")
+                                .asRuntimeException());
+                        return;
+                    }
+
                     System.out.println("Received sensor data from: " + reading.getSensorId() + " Value: " + reading.getValue());
                     count++;
                 }

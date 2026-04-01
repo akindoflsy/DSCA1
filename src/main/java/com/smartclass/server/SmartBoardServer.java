@@ -1,8 +1,10 @@
 package com.smartclass.server;
 
 import com.smartclass.smartboard.*;
+import io.grpc.Context;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
+import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
 import javax.jmdns.JmDNS;
 import javax.jmdns.ServiceInfo;
@@ -14,6 +16,7 @@ public class SmartBoardServer {
         int port = 50053;
         Server server = ServerBuilder.forPort(port)
                 .addService(new SmartBoardServiceImpl())
+                .intercept(new AuthInterceptor())
                 .build()
                 .start();
 
@@ -23,7 +26,7 @@ public class SmartBoardServer {
         JmDNS jmdns = JmDNS.create(InetAddress.getLocalHost());
         ServiceInfo serviceInfo = ServiceInfo.create("_grpc._tcp.local.", "SmartBoardService", port, "path=index");
         jmdns.registerService(serviceInfo);
-        System.out.println("Registered SmartBoardService with JmDNS");
+        System.out.println("Registered SmartBoardService with JmDNS.");
 
         server.awaitTermination();
     }
@@ -33,7 +36,23 @@ public class SmartBoardServer {
         // Simple RPC
         @Override
         public void pushContent(ContentRequest req, StreamObserver<ActionResponse> responseObserver) {
-            System.out.println("Pushing content: " + req.getLessonUrl() + " [" + req.getMediaType() + "]");
+            // Input validation
+            if (req.getLessonUrl() == null || req.getLessonUrl().isEmpty()) {
+                responseObserver.onError(
+                        Status.INVALID_ARGUMENT
+                                .withDescription("Lesson URL can not be empty.")
+                                .asRuntimeException());
+                return;
+            }
+            if (req.getMediaType() == null || req.getMediaType().isEmpty()) {
+                responseObserver.onError(
+                        Status.INVALID_ARGUMENT
+                                .withDescription("Media type can not be empty.")
+                                .asRuntimeException());
+                return;
+            }
+
+            System.out.println("Pushing content: " + req.getLessonUrl() + req.getMediaType());
             ActionResponse response = ActionResponse.newBuilder()
                     .setSuccess(true)
                     .setStatusMessage("Content successfully loaded on SmartBoard.")
@@ -45,14 +64,31 @@ public class SmartBoardServer {
         // Bidirectional Streaming RPC
         @Override
         public StreamObserver<TeacherCommand> liveClassSession(StreamObserver<BoardEvent> responseObserver) {
-            // Observer
             return new StreamObserver<TeacherCommand>() {
                 @Override
                 public void onNext(TeacherCommand command) {
+                    // Check if is cancelled
+                    if (Context.current().isCancelled()) {
+                        System.out.println("Client cancelled the live class session.");
+                        responseObserver.onError(
+                                Status.CANCELLED
+                                        .withDescription("Client cancelled the live class session")
+                                        .asRuntimeException());
+                        return;
+                    }
+
+                    // Input validation
+                    if (command.getCommand() == null || command.getCommand().isEmpty()) {
+                        responseObserver.onError(
+                                Status.INVALID_ARGUMENT
+                                        .withDescription("Command must not be empty")
+                                        .asRuntimeException());
+                        return;
+                    }
+
                     System.out.println("Received command from Teacher: " + command.getCommand());
 
-                    // responseObserver
-                    String feedback = "";
+                    String feedback;
                     if (command.getCommand().equals("NEXT_SLIDE")) {
                         feedback = "SLIDE_CHANGED_TO_NEXT";
                     } else if (command.getCommand().equals("LOCK_BOARD")) {
@@ -69,7 +105,7 @@ public class SmartBoardServer {
 
                 @Override
                 public void onError(Throwable t) {
-                    System.err.println("Session error: " + t.getMessage());
+                    System.err.println("Session error: " + Status.fromThrowable(t).getCode() + t.getMessage());
                 }
 
                 @Override

@@ -1,8 +1,10 @@
 package com.smartclass.server;
 
 import com.smartclass.attendance.*;
+import io.grpc.Context;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
+import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
 import javax.jmdns.JmDNS;
 import javax.jmdns.ServiceInfo;
@@ -14,6 +16,7 @@ public class AttendanceServer {
         int port = 50051;
         Server server = ServerBuilder.forPort(port)
                 .addService(new AttendanceServiceImpl())
+                .intercept(new AuthInterceptor())
                 .build()
                 .start();
 
@@ -31,10 +34,26 @@ public class AttendanceServer {
     static class AttendanceServiceImpl extends AttendanceServiceGrpc.AttendanceServiceImplBase {
         @Override
         public void logAttendance(StudentRequest req, StreamObserver<AttendanceResponse> responseObserver) {
+            // Validation
+            if (req.getStudentId() == null || req.getStudentId().isEmpty()) {
+                responseObserver.onError(
+                        Status.INVALID_ARGUMENT
+                                .withDescription("Student ID can not be empty.")
+                                .asRuntimeException());
+                return;
+            }
+            if (req.getTimestamp() == null || req.getTimestamp().isEmpty()) {
+                responseObserver.onError(
+                        Status.INVALID_ARGUMENT
+                                .withDescription("timestamp can not be empty.")
+                                .asRuntimeException());
+                return;
+            }
+
             System.out.println("Received scan for: " + req.getStudentId());
             AttendanceResponse response = AttendanceResponse.newBuilder()
                     .setSuccess(true)
-                    .setMessage("Student " + req.getStudentId() + " logged successfully.")
+                    .setMessage("Student " + req.getStudentId() + " has been logged successfully.")
                     .build();
             responseObserver.onNext(response);
             responseObserver.onCompleted(); // Simple RPC
@@ -43,13 +62,30 @@ public class AttendanceServer {
         @Override
         public void streamAttendanceLogs(EmptyAttendance req, StreamObserver<AttendanceRecord> responseObserver) {
             for (int i = 0; i < 5; i++) {
+                // Check if the client has cancelled
+                if (Context.current().isCancelled()) {
+                    System.out.println("Client cancelled the attendance stream.");
+                    responseObserver.onError(
+                            Status.CANCELLED
+                                    .withDescription("Client cancelled the attendance stream")
+                                    .asRuntimeException());
+                    return;
+                }
+
                 AttendanceRecord record = AttendanceRecord.newBuilder()
-                        .setStudentId("Student-" + i)
+                        .setStudentId("Student" + i)
                         .setTimestamp(System.currentTimeMillis() + "")
                         .setStatus("Present")
                         .build();
                 responseObserver.onNext(record);
-                try { Thread.sleep(1000); } catch (InterruptedException e) { e.printStackTrace(); }
+                try { Thread.sleep(1000); } catch (InterruptedException e) {
+                    System.err.println("Stream is interrupted: " + e.getMessage());
+                    responseObserver.onError(
+                            Status.ABORTED
+                                    .withDescription("Stream is interrupted on server")
+                                    .asRuntimeException());
+                    return;
+                }
             }
             responseObserver.onCompleted();
         }
