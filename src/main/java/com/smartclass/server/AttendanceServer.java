@@ -61,13 +61,13 @@ public class AttendanceServer {
 
         @Override
         public void streamAttendanceLogs(EmptyAttendance req, StreamObserver<AttendanceRecord> responseObserver) {
-            for (int i = 0; i < 5; i++) {
+            for (int i = 1; i < 6; i++) {
                 // Check if the client has cancelled
                 if (Context.current().isCancelled()) {
                     System.out.println("Client cancelled the attendance stream.");
                     responseObserver.onError(
                             Status.CANCELLED
-                                    .withDescription("Client cancelled the attendance stream")
+                                    .withDescription("Client cancelled the attendance stream.")
                                     .asRuntimeException());
                     return;
                 }
@@ -82,7 +82,7 @@ public class AttendanceServer {
                     System.err.println("Stream is interrupted: " + e.getMessage());
                     responseObserver.onError(
                             Status.ABORTED
-                                    .withDescription("Stream is interrupted on server")
+                                    .withDescription("Stream is interrupted on server.")
                                     .asRuntimeException());
                     return;
                 }

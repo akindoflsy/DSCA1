@@ -41,7 +41,7 @@ public class EnvironmentServer {
             try {
                 MetricsResponse response = MetricsResponse.newBuilder()
                         .setNoiseLevel(50)
-                        .setLuxLevel(30)
+                        .setLuxLevel(300)
                         .build();
                 responseObserver.onNext(response);
                 responseObserver.onCompleted();
@@ -57,7 +57,7 @@ public class EnvironmentServer {
         // Server-Side Streaming RPC
         @Override
         public void streamLiveMetrics(EmptyEnvironment req, StreamObserver<MetricsResponse> responseObserver) {
-            System.out.println("Starting live metrics stream to client...");
+            System.out.println("Starting live metrics stream to client.");
             for (int i = 0; i < 5; i++) {
                 // Check if the client has cancelled the stream.
                 if (Context.current().isCancelled()) {

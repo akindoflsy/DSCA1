@@ -105,6 +105,36 @@ public class TeacherControlPanel extends JFrame {
         add(buttonPanel, BorderLayout.SOUTH);
     }
 
+    private void connectToService(String serviceName, String host, int port) {
+        ManagedChannel channel = ManagedChannelBuilder.forAddress(host, port)
+                .usePlaintext()
+                .build();
+
+        ClientInterceptor authInterceptor = MetadataUtils.newAttachHeadersInterceptor(buildAuthMetadata());
+
+        switch (serviceName) {
+            case "AttendanceService":
+                attendanceStub = AttendanceServiceGrpc.newBlockingStub(channel)
+                        .withInterceptors(authInterceptor);
+                attendanceAsyncStub = AttendanceServiceGrpc.newStub(channel)
+                        .withInterceptors(authInterceptor);
+                break;
+            case "EnvironmentService":
+                environmentStub = EnvironmentServiceGrpc.newBlockingStub(channel)
+                        .withInterceptors(authInterceptor);
+                environmentAsyncStub = EnvironmentServiceGrpc.newStub(channel)
+                        .withInterceptors(authInterceptor);
+                break;
+            case "SmartBoardService":
+                smartBoardStub = SmartBoardServiceGrpc.newBlockingStub(channel)
+                        .withInterceptors(authInterceptor);
+                smartBoardAsyncStub = SmartBoardServiceGrpc.newStub(channel)
+                        .withInterceptors(authInterceptor);
+                break;
+        }
+        logMessage("System: Connected to " + serviceName + " at " + host + ":" + port);
+    }
+
     private void discoverServices() {
         logMessage("System: Starting JmDNS Service Discovery...");
         try {
@@ -112,12 +142,13 @@ public class TeacherControlPanel extends JFrame {
             jmdns.addServiceListener("_grpc._tcp.local.", new ServiceListener() {
                 @Override
                 public void serviceAdded(ServiceEvent event) {
+                    logMessage("System: Service found: " + event.getName() + ", requesting info.");
                     jmdns.requestServiceInfo(event.getType(), event.getName());
                 }
 
                 @Override
                 public void serviceRemoved(ServiceEvent event) {
-                    logMessage("System: Service disconnected - " + event.getName());
+                    logMessage("System: Service disconnected: " + event.getName());
                 }
 
                 @Override
@@ -134,38 +165,16 @@ public class TeacherControlPanel extends JFrame {
                     int port = event.getInfo().getPort();
 
                     logMessage("System: Discovered " + serviceName + " at " + host + ":" + port);
-
-                    ManagedChannel channel = ManagedChannelBuilder.forAddress(host, port)
-                            .usePlaintext()
-                            .build();
-
-                    ClientInterceptor authInterceptor = MetadataUtils.newAttachHeadersInterceptor(buildAuthMetadata());
-
-                    switch (serviceName) {
-                        case "AttendanceService":
-                            attendanceStub = AttendanceServiceGrpc.newBlockingStub(channel)
-                                    .withInterceptors(authInterceptor);
-                            attendanceAsyncStub = AttendanceServiceGrpc.newStub(channel)
-                                    .withInterceptors(authInterceptor);
-                            break;
-                        case "EnvironmentService":
-                            environmentStub = EnvironmentServiceGrpc.newBlockingStub(channel)
-                                    .withInterceptors(authInterceptor);
-                            environmentAsyncStub = EnvironmentServiceGrpc.newStub(channel)
-                                    .withInterceptors(authInterceptor);
-                            break;
-                        case "SmartBoardService":
-                            smartBoardStub = SmartBoardServiceGrpc.newBlockingStub(channel)
-                                    .withInterceptors(authInterceptor);
-                            smartBoardAsyncStub = SmartBoardServiceGrpc.newStub(channel)
-                                    .withInterceptors(authInterceptor);
-                            break;
-                    }
+                    connectToService(serviceName, host, port);
                 }
             });
         } catch (IOException e) {
-            logMessage("Error: JmDNS initialization failed - " + e.getMessage());
+            logMessage("Error: JmDNS initialization failed: " + e.getMessage());
         }
+
+        connectToService("AttendanceService", "localhost", 50051);
+        connectToService("EnvironmentService", "localhost", 50052);
+        connectToService("SmartBoardService", "localhost", 50053);
     }
 
     private void callAttendanceService() {
@@ -184,7 +193,7 @@ public class TeacherControlPanel extends JFrame {
                     .logAttendance(request);
             logMessage("Attendance Server: " + response.getMessage());
         } catch (StatusRuntimeException e) {
-            logMessage("RPC Failed:" + e.getStatus().getCode() + e.getStatus().getDescription());
+            logMessage("RPC Failed: " + e.getStatus().getCode() + e.getStatus().getDescription());
         } catch (Exception e) {
             logMessage("Unexpected Error: " + e.getMessage());
         }
@@ -202,7 +211,7 @@ public class TeacherControlPanel extends JFrame {
                     .getMetrics(request);
             logMessage("Environment Server: Noise=" + response.getNoiseLevel() + "dB, Lux=" + response.getLuxLevel());
         } catch (StatusRuntimeException e) {
-            logMessage("RPC Failed:" + e.getStatus().getCode() + e.getStatus().getDescription());
+            logMessage("RPC Failed: " + e.getStatus().getCode() + e.getStatus().getDescription());
         } catch (Exception e) {
             logMessage("Unexpected Error: " + e.getMessage());
         }
