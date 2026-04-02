@@ -10,6 +10,8 @@ import javax.jmdns.JmDNS;
 import javax.jmdns.ServiceInfo;
 import java.io.IOException;
 import java.net.InetAddress;
+import java.net.NetworkInterface;
+import java.util.Enumeration;
 
 public class AttendanceServer {
     public static void main(String[] args) throws IOException, InterruptedException {
@@ -23,12 +25,30 @@ public class AttendanceServer {
         System.out.println("Attendance Server started, listening on " + port);
 
         // JmDNS service publishing
-        JmDNS jmdns = JmDNS.create(InetAddress.getLocalHost());
+        InetAddress jmdnsAddress = getSiteLocalAddress();
+        System.out.println("JmDNS binding to: " + jmdnsAddress.getHostAddress());
+        JmDNS jmdns = JmDNS.create(jmdnsAddress);
         ServiceInfo serviceInfo = ServiceInfo.create("_grpc._tcp.local.", "AttendanceService", port, "path=index");
         jmdns.registerService(serviceInfo);
         System.out.println("Registered AttendanceService with JmDNS");
 
         server.awaitTermination();
+    }
+
+    static InetAddress getSiteLocalAddress() throws IOException {
+        Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+        while (interfaces.hasMoreElements()) {
+            NetworkInterface ni = interfaces.nextElement();
+            if (ni.isLoopback() || !ni.isUp()) continue;
+            Enumeration<InetAddress> addresses = ni.getInetAddresses();
+            while (addresses.hasMoreElements()) {
+                InetAddress addr = addresses.nextElement();
+                if (addr instanceof java.net.Inet4Address && addr.isSiteLocalAddress()) {
+                    return addr;
+                }
+            }
+        }
+        return InetAddress.getLocalHost();
     }
 
     static class AttendanceServiceImpl extends AttendanceServiceGrpc.AttendanceServiceImplBase {

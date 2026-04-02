@@ -8,12 +8,13 @@ import io.grpc.stub.MetadataUtils;
 import io.grpc.stub.StreamObserver;
 
 import javax.jmdns.JmDNS;
-import javax.jmdns.ServiceEvent;
-import javax.jmdns.ServiceListener;
+import javax.jmdns.ServiceInfo;
 import javax.swing.*;
 import java.awt.*;
 import java.io.IOException;
 import java.net.InetAddress;
+import java.net.NetworkInterface;
+import java.util.Enumeration;
 import java.util.concurrent.TimeUnit;
 
 public class TeacherControlPanel extends JFrame {
@@ -137,44 +138,51 @@ public class TeacherControlPanel extends JFrame {
 
     private void discoverServices() {
         logMessage("System: Starting JmDNS Service Discovery...");
-        try {
-            JmDNS jmdns = JmDNS.create(InetAddress.getLocalHost());
-            jmdns.addServiceListener("_grpc._tcp.local.", new ServiceListener() {
-                @Override
-                public void serviceAdded(ServiceEvent event) {
-                    logMessage("System: Service found: " + event.getName() + ", requesting info.");
-                    jmdns.requestServiceInfo(event.getType(), event.getName());
-                }
+        new Thread(() -> {
+            try {
+                InetAddress jmdnsAddress = getSiteLocalAddress();
+                logMessage("System: JmDNS binding to: " + jmdnsAddress.getHostAddress());
+                JmDNS jmdns = JmDNS.create(jmdnsAddress);
 
-                @Override
-                public void serviceRemoved(ServiceEvent event) {
-                    logMessage("System: Service disconnected: " + event.getName());
-                }
+                String type = "_grpc._tcp.local.";
+                int maxRetries = 10;
 
-                @Override
-                public void serviceResolved(ServiceEvent event) {
-                    String serviceName = event.getName();
-                    String[] addresses = event.getInfo().getHostAddresses();
-
-                    if (addresses == null || addresses.length == 0) {
-                        logMessage("System: Address not resolved for " + serviceName);
+                for (int i = 1; i <= maxRetries; i++) {
+                    if (attendanceStub != null && environmentStub != null && smartBoardStub != null) {
+                        logMessage("System: All services discovered successfully.");
                         return;
                     }
 
-                    String host = addresses[0];
-                    int port = event.getInfo().getPort();
+                    logMessage("System: Searching for services... (attempt " + i + "/" + maxRetries + ")");
+                    ServiceInfo[] services = jmdns.list(type, 3000);
 
-                    logMessage("System: Discovered " + serviceName + " at " + host + ":" + port);
-                    connectToService(serviceName, host, port);
+                    for (ServiceInfo info : services) {
+                        String serviceName = info.getName();
+                        String[] addresses = info.getHostAddresses();
+                        if (addresses == null || addresses.length == 0) continue;
+                        String host = addresses[0];
+                        int port = info.getPort();
+
+                        boolean shouldConnect = false;
+                        switch (serviceName) {
+                            case "AttendanceService": shouldConnect = (attendanceStub == null); break;
+                            case "EnvironmentService": shouldConnect = (environmentStub == null); break;
+                            case "SmartBoardService": shouldConnect = (smartBoardStub == null); break;
+                        }
+                        if (shouldConnect) {
+                            logMessage("System: Discovered " + serviceName + " at " + host + ":" + port);
+                            connectToService(serviceName, host, port);
+                        }
+                    }
                 }
-            });
-        } catch (IOException e) {
-            logMessage("Error: JmDNS initialization failed: " + e.getMessage());
-        }
 
-        connectToService("AttendanceService", "localhost", 50051);
-        connectToService("EnvironmentService", "localhost", 50052);
-        connectToService("SmartBoardService", "localhost", 50053);
+                if (attendanceStub == null) logMessage("Warning: AttendanceService not discovered within timeout.");
+                if (environmentStub == null) logMessage("Warning: EnvironmentService not discovered within timeout.");
+                if (smartBoardStub == null) logMessage("Warning: SmartBoardService not discovered within timeout.");
+            } catch (IOException e) {
+                logMessage("Error: JmDNS initialization failed: " + e.getMessage());
+            }
+        }).start();
     }
 
     private void callAttendanceService() {
@@ -421,6 +429,22 @@ public class TeacherControlPanel extends JFrame {
         } else {
             logMessage("System: No active live session to cancel.");
         }
+    }
+
+    private static InetAddress getSiteLocalAddress() throws IOException {
+        Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+        while (interfaces.hasMoreElements()) {
+            NetworkInterface ni = interfaces.nextElement();
+            if (ni.isLoopback() || !ni.isUp()) continue;
+            Enumeration<InetAddress> addresses = ni.getInetAddresses();
+            while (addresses.hasMoreElements()) {
+                InetAddress addr = addresses.nextElement();
+                if (addr instanceof java.net.Inet4Address && addr.isSiteLocalAddress()) {
+                    return addr;
+                }
+            }
+        }
+        return InetAddress.getLocalHost();
     }
 
     private void logMessage(String msg) {
